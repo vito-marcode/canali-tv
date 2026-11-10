@@ -12,11 +12,11 @@ It can replace the TIM app for live TV, for example on a box debloated with
 
 | | |
 |---|---|
-| ![TV guide](docs/screenshots/guide.jpg) | ![Channel list](docs/screenshots/channels.jpg) |
+| ![TV guide](docs/screenshots/guide.jpg) | ![Channel list](docs/screenshots/channels-live.jpg) |
 | TV guide (Guida TV) | Channel list |
-| ![Channel OSD](docs/screenshots/osd.jpg) | ![Programme info](docs/screenshots/info.jpg) |
+| ![Channel OSD](docs/screenshots/osd-live.jpg) | ![Programme info](docs/screenshots/info-live.jpg) |
 | Channel OSD | Programme info |
-| ![Quick menu](docs/screenshots/quick-menu.jpg) | ![Settings](docs/screenshots/settings.jpg) |
+| ![Quick menu](docs/screenshots/quick-menu-live.jpg) | ![Settings](docs/screenshots/settings.jpg) |
 | Quick menu | Settings |
 
 Taken on the box in the debug preview mode, which draws the screens without tuning. Where the live picture goes,
