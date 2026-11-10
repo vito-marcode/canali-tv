@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-feature android:name="android.software.leanback" android:required="false" />
+    <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
+
+    <application
+        android:name=".DttApp"
+        android:label="Canali TV"
+        android:icon="@mipmap/ic_launcher"
+        android:banner="@drawable/banner"
+        android:usesCleartextTraffic="true"
+        android:supportsRtl="false">
+
+        <activity
+            android:name=".LiveActivity"
+            android:exported="false"
+            android:launchMode="singleTask"
+            android:configChanges="keyboard|keyboardHidden|navigation|orientation|screenSize|screenLayout|uiMode"
+            android:screenOrientation="landscape"
+            android:theme="@android:style/Theme.Black.NoTitleBar.Fullscreen" />
+
+        <!-- Launcher entry "Canali TV": live TV on the last channel -->
+        <activity-alias android:name=".MainActivity" android:targetActivity=".LiveActivity" android:exported="true" android:label="Canali TV">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+                <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+
+        <!-- Integration contract: action it.mdv.dttchannels.PLAY, extras number (String LCN) or index (Int) -->
+        <activity-alias android:name=".PlayerActivity" android:targetActivity=".LiveActivity" android:exported="true">
+            <intent-filter>
+                <action android:name="it.mdv.dttchannels.PLAY" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity-alias>
+
+        <provider android:name=".ChannelProvider" android:authorities="it.mdv.dttchannels" android:exported="true" />
+    </application>
+</manifest>

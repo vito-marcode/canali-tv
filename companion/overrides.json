@@ -1,0 +1,14 @@
+{
+ "14": {"logo": "canale-italia-it.png"},
+ "15": {"logo": "7gold-it.png"},
+ "20": {"epg": "20.it", "logo": "20-it.png"},
+ "37": {"epg": "Discovery.Channel.it", "logo": "discovery-channel-it.png"},
+ "45": {"logo": "boing-it.png"},
+ "49": {"epg": "Italia.2.it", "logo": "italia2-it.png"},
+ "51": {"epg": "TGCom.it", "logo": "tgcom24-it.png"},
+ "53": {"logo": "italia-53-it.png"},
+ "56": {"epg": "HGTV.it"},
+ "59": {"epg": "Motor.Trend.it", "logo": "discovery-turbo-it.png"},
+ "67": {"epg": "R101tv.it", "logo": "r101-tv-it.png"},
+ "70": {"epg": "Radio.Italia.TV.HD.it", "logo": "radio-italia-it.png"}
+}

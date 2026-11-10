@@ -1,0 +1,15 @@
+[Unit]
+Description=Canali TV companion (channel list, EPG and logos for the TIM Box)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+# Edit: the user that owns ~/dtt, and the box's address
+User=pi
+Environment=DTT_BOX=192.168.1.50:5555
+ExecStart=/usr/bin/python3 /home/pi/dtt/dtt_sync.py
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
