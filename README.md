@@ -8,6 +8,20 @@ It can replace the TIM app for live TV, for example on a box debloated with
 [cleanyourtv](https://github.com/Gathin23/cleanyourtv), whose launcher can map the remote's TV button to it
 (`app_keys`: `KEYCODE_TV:it.mdv.dttchannels/.MainActivity`).
 
+## Screenshots
+
+| | |
+|---|---|
+| ![TV guide](docs/screenshots/guide.jpg) | ![Channel list](docs/screenshots/channels.jpg) |
+| TV guide (Guida TV) | Channel list |
+| ![Channel OSD](docs/screenshots/osd.jpg) | ![Programme info](docs/screenshots/info.jpg) |
+| Channel OSD | Programme info |
+| ![Quick menu](docs/screenshots/quick-menu.jpg) | ![Settings](docs/screenshots/settings.jpg) |
+| Quick menu | Settings |
+
+Taken on the box in the debug preview mode, which draws the screens without tuning: the black background is where
+the live picture goes.
+
 ## How it fits together
 
 ```
