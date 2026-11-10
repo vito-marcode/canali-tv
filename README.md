@@ -19,8 +19,8 @@ It can replace the TIM app for live TV, for example on a box debloated with
 | ![Quick menu](docs/screenshots/quick-menu.jpg) | ![Settings](docs/screenshots/settings.jpg) |
 | Quick menu | Settings |
 
-Taken on the box in the debug preview mode, which draws the screens without tuning: the black background is where
-the live picture goes.
+Taken on the box in the debug preview mode, which draws the screens without tuning. Where the live picture goes,
+the OSD, info, channel list and quick menu shots have an ambient backdrop added afterwards, in place of the video.
 
 ## How it fits together
 
