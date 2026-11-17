@@ -1,5 +1,7 @@
 package it.mdv.dttchannels.ui
 
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
@@ -17,6 +19,10 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.layout
+import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.zIndex
 import it.mdv.dttchannels.EPG_ROWS
 import it.mdv.dttchannels.EPG_SPAN
 import it.mdv.dttchannels.EPG_STEP
@@ -30,6 +36,8 @@ private const val CHAN_COL = 280
 private const val TIMELINE_W = PANEL_W - 2 * PANEL_PAD_H - CHAN_COL   // 1424 px for 150 min
 private const val ROW_H = 82
 private const val ROW_GAP = 10
+private const val CELL_INSET = 4          // gap on each side of a cell (design: "inset 4px on each side")
+private const val FOCUS_GROW = 8          // the focused cell is this much wider on each side, whatever its length
 
 @Composable
 fun EpgScreen(s: LiveState) {
@@ -119,14 +127,14 @@ fun EpgScreen(s: LiveState) {
                                 } else if (progs.isEmpty()) {
                                     val focused = r == s.epgRow
                                     Cell(null, "Nessuna informazione", null, focused, past = false, now = false,
-                                        Modifier.fillMaxSize())
+                                        atStart = true, atEnd = true, Modifier.fillMaxSize())
                                 }
                                 for (p in progs) {
                                     val l = ((p.start - ws).coerceAtLeast(0)).toFloat() / EPG_SPAN
                                     val rr = ((p.end - ws).coerceAtMost(EPG_SPAN)).toFloat() / EPG_SPAN
                                     val focused = r == s.epgRow && p.isOn(s.epgAnchor)
                                     Cell(p, p.title, "${hhmm(p.start)} – ${hhmm(p.end)}", focused, past = p.end <= s.now, now = p.isOn(s.now),
-                                        Modifier.offset(x = (TIMELINE_W * l).u).width((TIMELINE_W * (rr - l)).u).fillMaxHeight())
+                                        atStart = l == 0f, atEnd = rr == 1f, Modifier.offset(x = (TIMELINE_W * l).u).width((TIMELINE_W * (rr - l)).u).fillMaxHeight())
                                 }
                             }
                         }
@@ -148,18 +156,31 @@ fun EpgScreen(s: LiveState) {
 }
 
 @Composable
-private fun Cell(p: Programme?, title: String, time: String?, focused: Boolean, past: Boolean, now: Boolean, modifier: Modifier) {
+private fun Cell(p: Programme?, title: String, time: String?, focused: Boolean, past: Boolean, now: Boolean,
+                 atStart: Boolean, atEnd: Boolean, modifier: Modifier) {
     val idle = if (now) Color.White.copy(alpha = .16f) else Color.White.copy(alpha = .07f)
-    Box(modifier.padding(horizontal = 4.u).alpha(if (past && !focused) .6f else 1f)) {
-        Column(
-            Modifier.fillMaxSize().focusCard(focused, 22, scale = 1.04f, idle = idle, idleBorder = Color.White.copy(alpha = .12f))
-                .padding(horizontal = 20.u),
-            verticalArrangement = Arrangement.Center,
-        ) {
+    // The focused cell grows by the same FOCUS_GROW on each side whatever its length (a scale made long programmes
+    // jut out far more than short ones). At the window's edges it grows only up to the edge, where the row clips it.
+    val grow = animateFloatAsState(if (focused) 1f else 0f, tween(150), label = "grow")
+    val left = (if (atStart) CELL_INSET else FOCUS_GROW).u
+    val right = (if (atEnd) CELL_INSET else FOCUS_GROW).u
+    Box(modifier.zIndex(if (focused) 1f else 0f).padding(horizontal = CELL_INSET.u).alpha(if (past && !focused) .6f else 1f)) {
+        Box(Modifier.matchParentSize().growX(left, right) { grow.value }
+            .focusCard(focused, 22, scale = 1f, idle = idle, idleBorder = Color.White.copy(alpha = .12f)))
+        Column(Modifier.fillMaxSize().padding(horizontal = 20.u), verticalArrangement = Arrangement.Center) {
             T(title, 26, 600, if (focused) C.OnFocus else C.White)
             if (time != null) T(time, 24, tabular = true, color = if (focused) C.OnFocus2 else Color.White.copy(alpha = .7f))
         }
     }
+}
+
+/** Lays the content out wider by [left] and [right] (times [f]) while keeping this node's own size and place. */
+private fun Modifier.growX(left: Dp, right: Dp, f: () -> Float) = layout { m, c ->
+    val l = (left * f()).roundToPx()
+    val r = (right * f()).roundToPx()
+    val w = c.maxWidth
+    val pl = m.measure(Constraints.fixed(w + l + r, c.maxHeight))
+    layout(w, c.maxHeight) { pl.place(-l, 0) }
 }
 
 private fun dayLabel(t: Long, now: Long): String {
