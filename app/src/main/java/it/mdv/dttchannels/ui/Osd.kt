@@ -47,7 +47,8 @@ fun Osd(s: LiveState) {
         BottomScrim()
         TopPills(s)
         // one full-width card: → steps forward through the schedule, ← steps back to the current programme
-        Box(Modifier.align(Alignment.BottomStart).fillMaxWidth().padding(start = 80.u, end = 80.u, bottom = 110.u)) {
+        // the info card grows upwards with its synopsis, but stops INFO_TOP from the top, below the pills
+        Box(Modifier.align(Alignment.BottomStart).fillMaxWidth().padding(start = 80.u, end = 80.u, bottom = 110.u, top = INFO_TOP.u)) {
             // while browsing with ↑/↓ the text updates at once; artwork waits for the user to settle
             val imageDelay = if (s.browsing || offset > 0) BROWSE_IMAGE_DELAY else 0L
             if (s.info) InfoCard(s, ch, shown, offset, imageDelay)
@@ -64,6 +65,7 @@ fun Osd(s: LiveState) {
 }
 
 private const val BROWSE_IMAGE_DELAY = 220L
+private const val INFO_TOP = 160      // top pills end at 48 + 88; 24 px gap below them
 
 /**
  * Digit entry: only the typed number (no name, no clock). The full OSD appears once the number
@@ -141,7 +143,9 @@ private fun InfoCard(s: LiveState, ch: Channel, p: Programme?, offset: Int, imag
             }
             T(p?.title ?: ch.name, 56, 700, lineHeight = 1.05f)
             val synopsis = p?.let { listOfNotNull(it.subtitle, it.desc.takeIf { d -> d.isNotBlank() }).joinToString(" — ") }.orEmpty()
-            if (synopsis.isNotBlank()) T(synopsis, 32, color = Color.White.copy(alpha = .85f), maxLines = 3, lineHeight = 1.35f)
+            // the whole synopsis; only if it is taller than the room left (card capped at INFO_TOP) is the last line cut
+            if (synopsis.isNotBlank()) T(synopsis, 32, color = Color.White.copy(alpha = .85f), maxLines = Int.MAX_VALUE,
+                lineHeight = 1.35f, modifier = Modifier.weight(1f, fill = false))
             else if (p == null) T("Guida TV non disponibile per questo canale", 30, color = Color.White.copy(alpha = .75f))
             val chips = buildList {
                 p?.genre?.takeIf { it.isNotBlank() }?.let { add(it) }
