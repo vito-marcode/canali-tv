@@ -12,7 +12,7 @@ It can replace the TIM app for live TV, for example on a box debloated with
 
 | | |
 |---|---|
-| ![TV guide](docs/screenshots/guide.jpg) | ![Channel list](docs/screenshots/channels-live.jpg) |
+| ![TV guide](docs/screenshots/guide-hero.jpg) | ![Channel list](docs/screenshots/channels-live.jpg) |
 | TV guide (Guida TV) | Channel list |
 | ![Channel OSD](docs/screenshots/osd-live.jpg) | ![Programme info](docs/screenshots/info-live.jpg) |
 | Channel OSD | Programme info |
