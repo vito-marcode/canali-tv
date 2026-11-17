@@ -36,6 +36,7 @@ private const val CHAN_COL = 280
 private const val TIMELINE_W = PANEL_W - 2 * PANEL_PAD_H - CHAN_COL   // 1424 px for 150 min
 private const val ROW_H = 82
 private const val ROW_GAP = 10
+private const val HERO_W = 1160           // hero text column, x 80 -> 1240
 private const val CELL_INSET = 4          // gap on each side of a cell (design: "inset 4px on each side")
 private const val FOCUS_GROW = 8          // the focused cell is this much wider on each side, whatever its length
 
@@ -62,24 +63,17 @@ fun EpgScreen(s: LiveState) {
                     drawRect(Brush.horizontalGradient(0f to Color.Transparent, .4f to Color.Black), blendMode = BlendMode.DstIn)
                 }, radius = 44, logoScale = .35f, delayMs = 180)   // ← → / ↑ ↓ repeat fast: load artwork once settled
 
-        // hero text
-        Column(Modifier.padding(start = 80.u, top = 140.u).width(1000.u), verticalArrangement = Arrangement.spacedBy(14.u)) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.u)) {
-                if (focusRowCh != null) T("${focusRowCh.lcn} · ${focusRowCh.name}", 24, 600)
-                if (fp != null) {
-                    T("·", 24, color = C.Text2); T("${hhmm(fp.start)} – ${hhmm(fp.end)}", 24, tabular = true, color = C.Text2)
-                    if (fp.genre.isNotBlank()) { T("·", 24, color = C.Text2); T(fp.genre, 24, color = C.Text2) }
-                    if (fp.isOn(s.now)) Chip { LiveDot(10); T("IN ONDA", 24, 600) }
-                }
-            }
+        // hero text: title, synopsis (32 px, up to 4 lines) and hints; the channel and times are in the grid below.
+        // It runs 160 px into the image's faded left edge (image from x 1080, opaque from 1384), so less is cut.
+        Column(Modifier.padding(start = 80.u, top = 140.u).width(HERO_W.u), verticalArrangement = Arrangement.spacedBy(14.u)) {
             if (!s.epgLoaded) {
                 SkeletonLine(76, 820, lineHeight = 1f)
-                SkeletonLine(28, 900, lineHeight = 1.4f); SkeletonLine(28, 600, lineHeight = 1.4f)
+                SkeletonLine(32, 1000, lineHeight = 1.4f); SkeletonLine(32, 700, lineHeight = 1.4f)
             } else {
             T(fp?.title ?: (focusRowCh?.name ?: ""), 76, 700, lineHeight = 1f)
             T(fp?.let { p -> listOfNotNull(p.subtitle, p.desc.takeIf { it.isNotBlank() }).joinToString(" — ") }?.ifBlank { null }
                 ?: if (fp != null) "Nessuna descrizione disponibile." else "Nessuna informazione disponibile per questo orario.",
-                28, color = Color.White.copy(alpha = .8f), maxLines = 3, lineHeight = 1.4f, modifier = Modifier.widthIn(max = 900.u))
+                32, color = Color.White.copy(alpha = .8f), maxLines = 4, lineHeight = 1.4f)
             }
             Hints("OK" to "Guarda ora", "← →" to "Orari", "↑ ↓" to "Canali", "CH±" to "Giorno")
         }
