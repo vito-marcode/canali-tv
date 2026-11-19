@@ -27,7 +27,14 @@ android {
     compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
     kotlinOptions { jvmTarget = "17" }
     buildTypes {
-        release { isMinifyEnabled = false; signingConfig = signingConfigs.getByName("debug") }
+        release {
+            // R8 + resource shrinking: smaller dex (less Code PSS) and optimised Compose on the 1 GB box.
+            // Signed with the debug key so it installs over a debug build (install -r) without losing data.
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"))
+            signingConfig = signingConfigs.getByName("debug")
+        }
     }
 }
 

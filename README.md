@@ -70,10 +70,21 @@ Leaving the app while delayed asks for a second Back, because the recording is d
 
 ## Build & install
 
+Use the release build on the box. It is shrunk and optimised with R8 (1.3 MB instead of 8.4 MB), and a
+debuggable build runs Compose largely interpreted: on the box the release build cold-starts in about 1.7 s
+instead of 6 s and scrolls the guide far more smoothly.
+
 ```sh
-JAVA_HOME=/Library/Java/JavaVirtualMachines/temurin-17.jdk/Contents/Home ./gradlew assembleDebug
-adb -s <box ip>:5555 install -r app/build/outputs/apk/debug/app-debug.apk
+JAVA_HOME=/Library/Java/JavaVirtualMachines/temurin-17.jdk/Contents/Home ./gradlew assembleRelease
+adb -s <box ip>:5555 install -r app/build/outputs/apk/release/app-release.apk
+# optional, after the first launch (which installs the bundled baseline profile): compile now instead of
+# waiting for the idle-time dexopt job
+adb -s <box ip>:5555 shell cmd package compile -m speed-profile -f it.mdv.dttchannels
 ```
+
+The release build is signed with the debug key, so debug and release builds install over each other with
+`install -r` and keep the channel list and settings. Use `assembleDebug` (`app/build/outputs/apk/debug/app-debug.apk`)
+for the preview mode below and for `run-as`.
 
 The companion's address is built into the app. Put it in `local.properties` (not committed) before building:
 
