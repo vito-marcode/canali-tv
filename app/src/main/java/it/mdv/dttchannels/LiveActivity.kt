@@ -1,5 +1,6 @@
 package it.mdv.dttchannels
 
+import android.content.ComponentCallbacks2
 import android.content.ComponentName
 import android.content.Intent
 import android.graphics.Color
@@ -14,6 +15,7 @@ import android.widget.FrameLayout
 import androidx.activity.ComponentActivity
 import androidx.compose.ui.platform.ComposeView
 import androidx.lifecycle.lifecycleScope
+import coil.imageLoader
 import it.mdv.dttchannels.ui.LiveRoot
 
 /**
@@ -78,11 +80,26 @@ class LiveActivity : ComponentActivity(), Player {
 
     override fun onStart() {
         super.onStart()
-        if (::state.isInitialized && stopped) { stopped = false; state.channel?.let { tune(it) } }
+        if (::state.isInitialized && stopped) { stopped = false; state.restoreEpg(); state.channel?.let { tune(it) } }
     }
 
     private var stopped = false
     override fun onStop() { super.onStop(); stopped = true; tv.reset() }
+
+    /**
+     * Shrink the cached process. UI hidden: DttApp drops the decoded images. Memory tight while we are off
+     * screen: drop the parsed EPG too. Then one GC, so the evicted Bitmaps' native pixels are really freed.
+     */
+    override fun onTrimMemory(level: Int) {
+        super.onTrimMemory(level)
+        // UI_HIDDEN can arrive just before onStop(): it means hidden by itself
+        val hidden = stopped || level >= ComponentCallbacks2.TRIM_MEMORY_UI_HIDDEN
+        if (!hidden || level < ComponentCallbacks2.TRIM_MEMORY_RUNNING_CRITICAL) return
+        if (stopped && (level >= ComponentCallbacks2.TRIM_MEMORY_BACKGROUND || level == ComponentCallbacks2.TRIM_MEMORY_RUNNING_CRITICAL))
+            state.releaseEpg()
+        imageLoader.memoryCache?.clear()
+        Runtime.getRuntime().gc()
+    }
 
     private fun requested(i: Intent?): Pair<String?, Int?> {
         if (i == null) return null to null

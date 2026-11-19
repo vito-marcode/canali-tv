@@ -66,6 +66,7 @@ class Repository(private val ctx: Context) {
         if (!f.exists()) return emptyMap()
         return try {
             JsonReader(f.bufferedReader(bufferSize = 64 * 1024)).use { r ->
+                val pool = StringPool()
                 val out = HashMap<Long, List<Programme>>()
                 r.beginObject()
                 while (r.hasNext()) {
@@ -76,9 +77,10 @@ class Repository(private val ctx: Context) {
                         if (id == null) { r.skipValue(); continue }
                         val list = ArrayList<Programme>()
                         r.beginArray()
-                        while (r.hasNext()) readProgramme(r)?.let(list::add)
+                        while (r.hasNext()) readProgramme(r, pool)?.let(list::add)
                         r.endArray()
                         list.sortBy { it.start }
+                        list.trimToSize()
                         out[id] = list
                     }
                     r.endObject()
@@ -89,7 +91,16 @@ class Repository(private val ctx: Context) {
         } catch (e: Exception) { Log.w(TAG, "bad epg.json", e); emptyMap() }
     }
 
-    private fun readProgramme(r: JsonReader): Programme? {
+    /**
+     * Parse-local dedup: series repeat their title, synopsis and artwork URL across the 54 h, and the Pi
+     * reuses one image per series (≈1.3 k distinct URLs for ≈8.4 k programmes). One copy each on the heap.
+     */
+    private class StringPool {
+        private val map = HashMap<String, String>(4096)
+        operator fun invoke(s: String): String = map.getOrPut(s) { s }
+    }
+
+    private fun readProgramme(r: JsonReader, pool: StringPool): Programme? {
         var s = -1L; var e = -1L
         var t = ""; var g = ""; var d = ""; var i: String? = null; var st: String? = null
         r.beginObject()
@@ -99,11 +110,11 @@ class Repository(private val ctx: Context) {
             when (name) {
                 "s" -> s = r.nextLong()
                 "e" -> e = r.nextLong()
-                "t" -> t = r.nextString()
-                "g" -> g = r.nextString().intern()          // a few dozen distinct genres
-                "d" -> d = r.nextString()
-                "i" -> i = r.nextString().ifEmpty { null }
-                "st" -> st = r.nextString().ifEmpty { null }
+                "t" -> t = pool(r.nextString())
+                "g" -> g = pool(r.nextString())             // a few dozen distinct genres
+                "d" -> d = pool(r.nextString())
+                "i" -> i = r.nextString().ifEmpty { null }?.let(pool::invoke)
+                "st" -> st = r.nextString().ifEmpty { null }?.let(pool::invoke)
                 else -> r.skipValue()
             }
         }

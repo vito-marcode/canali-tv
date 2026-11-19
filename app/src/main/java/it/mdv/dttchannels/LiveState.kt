@@ -188,8 +188,28 @@ class LiveState(
         if (curId != null) current = channels.indexOfFirst { it.id == curId }
     }
 
+    /** True while the EPG has been dropped to shrink the cached process: [restoreEpg] parses it again. */
+    private var epgReleased = false
+
+    /**
+     * Backgrounded under memory pressure: drop the parsed guide (≈2–3 MB of heap). epg.json stays on disk and
+     * is re-parsed (≈0.7 s, off the main thread, skeletons meanwhile) when the activity is visible again.
+     */
+    fun releaseEpg() {
+        if (epgReleased) return
+        epgReleased = true
+        epg = emptyMap(); gridEpg = emptyMap(); epgLoaded = false
+    }
+
+    fun restoreEpg() {
+        if (!epgReleased) return
+        epgReleased = false
+        scope.launch { loadEpg() }
+    }
+
     /** Parse + index the EPG on a background thread, then publish it in one state write. */
     private suspend fun loadEpg() {
+        if (epgReleased) return                          // in the background: restoreEpg() will parse the newest file
         val (all, grid) = withContext(Dispatchers.Default) {
             val t0 = System.nanoTime()
             val all = repo.epg()
@@ -197,6 +217,7 @@ class LiveState(
                 android.util.Log.i("DttLive", "epg: ${all.size} channels parsed in ${(System.nanoTime() - t0) / 1_000_000} ms")
             }
         }
+        if (epgReleased) return                          // released while parsing
         epg = all; gridEpg = grid; epgLoaded = true
     }
 
