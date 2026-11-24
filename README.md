@@ -52,12 +52,22 @@ the result.
 | Guide / Menu | Open or close the TV guide / the quick menu |
 | Info | Show or hide the OSD |
 | Last channel | Previous channel |
+| Mic (voice) | Voice search: say the channel, e.g. "Metti Rai 2", "metti rai due", "il canale 5", "Rai Radio 3" |
 | Back | Closes what is open; from a radio channel, back to TV; otherwise leaves the app |
 
 **Timeshift ("differita").** ▶❚❚ or OK pauses and resumes. ◀◀ ▶▶ (or ← → on the timeshift bar) jump 10 s;
 Stop or the TIM remote's blue circle key goes back to live. The Technicolor tuner keeps no rolling buffer: it
 starts recording at the first pause, so you can go back only as far as that pause, and "live" means a re-tune.
 Leaving the app while delayed asks for a second Back, because the recording is dropped.
+
+**Voice search.** While Canali TV is on screen, the remote's mic key (it sends `KEYCODE_SEARCH`) starts the box's
+Google speech recogniser inside the app, so the picture keeps playing. Tap and speak, or hold the key while speaking
+and release it at the end. A card shows what has been heard. The phrase is matched to a channel by
+`VoiceMatch`: names and Italian number words are compared in the same normalised form ("Rai2", "rai due" and
+"Rai 2" are the same), command words are ignored, and a bare number is a channel number ("metti il 7"). When
+several channels match, the lowest number wins ("rai 3" is 3 Rai 3 TGR Marche, not the other regions' Rai 3).
+The first use asks for the microphone permission. Recognition needs internet (the box's offline Italian model
+does not load). Outside the app the mic key still opens Google search, which does not tune DTT channels.
 
 **Settings (Impostazioni).**
 - *Sincronizza*: asks the Pi for a fresh channel list and guide, then opens the guide.
@@ -101,13 +111,17 @@ tuning. Live video comes out black in screenshots on this box.
 ## Permissions and network
 
 - `INTERNET`, with cleartext HTTP allowed: the Pi is reached over plain HTTP on the LAN.
+- `RECORD_AUDIO`, asked the first time the mic key is pressed: voice search. Audio goes to the box's Google
+  recogniser only while the card is on screen.
 - Channel list, guide and logos come from the Pi. Programme images in the guide are loaded straight from the
   addresses in the XMLTV data, so they come from the internet.
 - No account, no analytics.
 
 ## Integration for other apps
 
-- Play: action `it.mdv.dttchannels.PLAY`, extra `number` (LCN, String) or `index` (Int).
+- Play: action `it.mdv.dttchannels.PLAY`, extra `number` (LCN, String), `index` (Int) or `query` (a phrase,
+  matched like voice search: `am start -a it.mdv.dttchannels.PLAY --es query "metti rai due"`).
+  `android.media.action.MEDIA_PLAY_FROM_SEARCH` with `SearchManager.QUERY` is accepted too.
   Launcher entry: `.MainActivity` (last channel).
 - Channel list: `content://it.mdv.dttchannels/channels` (`?number=5` for one LCN).
   Columns: `_id, number, name, type, onid, tsid, sid, input_id, channel_uri, browsable, radio, logo_uri`.

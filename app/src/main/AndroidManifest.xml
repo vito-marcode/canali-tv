@@ -1,6 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- voice search with the remote's mic key ("Metti Rai 2"); asked the first time it is used -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-feature android:name="android.hardware.microphone" android:required="false" />
     <uses-feature android:name="android.software.leanback" android:required="false" />
     <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
 
@@ -29,10 +32,15 @@
             </intent-filter>
         </activity-alias>
 
-        <!-- Integration contract: action it.mdv.dttchannels.PLAY, extras number (String LCN) or index (Int) -->
+        <!-- Integration contract: action it.mdv.dttchannels.PLAY, extras number (String LCN), index (Int) or query
+             (spoken phrase); MEDIA_PLAY_FROM_SEARCH lets an assistant hand over "Rai 2" as a query -->
         <activity-alias android:name=".PlayerActivity" android:targetActivity=".LiveActivity" android:exported="true">
             <intent-filter>
                 <action android:name="it.mdv.dttchannels.PLAY" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.media.action.MEDIA_PLAY_FROM_SEARCH" />
                 <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
         </activity-alias>

@@ -4,6 +4,7 @@ import android.content.SharedPreferences
 import android.media.tv.TvTrackInfo
 import android.view.KeyEvent
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -30,6 +31,9 @@ interface Player {
     fun timeShiftPause()
     fun timeShiftResume()
     fun timeShiftSeekTo(timeMs: Long)
+    /** Mic key: start in-app speech recognition (asks for the microphone permission the first time). */
+    fun startVoice()
+    fun cancelVoice()
 }
 
 const val EPG_SPAN = 150 * 60L          // visible window: 150 min
@@ -85,6 +89,10 @@ class LiveState(
     var digits by mutableStateOf(""); private set
     var toast by mutableStateOf<String?>(null); private set
     var busy by mutableStateOf<String?>(null); private set
+    /** Voice search: null when idle, else what has been heard so far ("" = listening, nothing yet). */
+    var voice by mutableStateOf<String?>(null); private set
+    /** Mic level (dB from the recogniser), read in the draw phase only. */
+    val voiceLevel = mutableFloatStateOf(0f)
 
     var listFocus by mutableIntStateOf(0); private set
     var quickFocus by mutableIntStateOf(0); private set
@@ -547,6 +555,29 @@ class LiveState(
         if (i >= 0) { closeOverlay(); tuneIndex(i) } else showToast("Canale non disponibile")
     }
 
+    // ------------------------------------------------------------ voice
+
+    fun onVoiceStart() { cancelDigits(); hideOsd(); voiceLevel.floatValue = 0f; voice = "" }
+    fun onVoicePartial(text: String) { if (voice != null) voice = text }
+    fun onVoiceLevel(db: Float) { voiceLevel.floatValue = db }
+    fun onVoiceError(msg: String) { voice = null; if (msg.isNotEmpty()) showToast(msg) }
+    fun onVoiceResults(phrases: List<String>) { voice = null; tuneByPhrase(phrases) }
+
+    /**
+     * "Metti Rai 2", "rai due", "il canale 5": tunes the channel named in the first hypothesis that matches one
+     * (the recogniser returns several spellings). Also used by PLAY / MEDIA_PLAY_FROM_SEARCH intents with a query.
+     */
+    fun tuneByPhrase(phrases: List<String>): Boolean {
+        val ch = phrases.firstNotNullOfOrNull { VoiceMatch.find(it, channels) }
+        if (ch == null) {
+            phrases.firstOrNull()?.let { showToast("Nessun canale per «$it»") } ?: showToast("Non ho sentito un canale, riprova")
+            return false
+        }
+        closeOverlay()
+        tuneIndex(channels.indexOf(ch))
+        return true
+    }
+
     // ------------------------------------------------------------ overlays
 
     private fun closeOverlay() { overlay = Overlay.NONE; avOpen = false; avInPanel = false }
@@ -574,6 +605,11 @@ class LiveState(
 
     /** Returns true when the key was consumed. Only ACTION_DOWN events are passed in. */
     fun onKey(code: Int): Boolean {
+        if (code == KeyEvent.KEYCODE_SEARCH) { player.startVoice(); return true }
+        if (voice != null) {                             // listening: any key stops it, BACK only does that
+            player.cancelVoice(); voice = null
+            if (code == KeyEvent.KEYCODE_BACK) return true
+        }
         val d = digitOf(code)
         if (d != null && overlay != Overlay.SETTINGS) { digit(d); return true }
         // delayed: OK only drives the timeshift (bar / Riprendi / Torna in diretta), it never changes channel

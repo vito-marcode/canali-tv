@@ -64,6 +64,7 @@ fun LiveRoot(s: LiveState, version: String) {
                 Overlay.SETTINGS -> SettingsScreen(s, version)
                 Overlay.NONE -> {}
             }
+            VoiceCard(s)
             Toast(s.toast)
             ImageWarmup(s)
             if (s.busy != null && s.overlay != Overlay.SETTINGS) BusyCard(s.busy!!)
