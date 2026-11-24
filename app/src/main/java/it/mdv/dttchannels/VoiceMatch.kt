@@ -19,10 +19,11 @@ import java.text.Normalizer
  */
 object VoiceMatch {
     fun find(phrase: String, channels: List<Channel>): Channel? {
-        val q = tokens(phrase)
-        if (q.isEmpty() || channels.isEmpty()) return null
+        if (channels.isEmpty()) return null
         val byLcn = channels.sortedWith(compareBy({ it.lcnInt }, { it.lcn }))
         val names = byLcn.map { it to tokens(it.name) }.filter { it.second.isNotEmpty() }
+        val q = unglue(tokens(phrase), names.flatMapTo(HashSet()) { it.second })
+        if (q.isEmpty()) return null
 
         for (len in q.size downTo 1) {
             val spans = (0..q.size - len).map { q.subList(it, it + len) }
@@ -57,6 +58,19 @@ object VoiceMatch {
     }
 
     private fun String.isNumber() = isNotEmpty() && all { it.isDigit() }
+
+    /**
+     * The recogniser sometimes glues a number word to the name: "Raiuno", "italiauno", "retequattro". Split such a
+     * word when its head is a word of some channel name and its tail a number word ("prodotto" stays whole).
+     */
+    private fun unglue(q: List<String>, nameWords: Set<String>): List<String> = q.flatMap { w ->
+        if (w.isNumber() || w in nameWords) return@flatMap listOf(w)
+        (2 until w.length).firstNotNullOfOrNull { i ->
+            val head = w.substring(0, i)
+            val n = number(w.substring(i))
+            if (n != null && head in nameWords) listOf(head, n.toString()) else null
+        } ?: listOf(w)
+    }
 
     /** "Metti Rai2 HD!" -> [metti, rai, 2]; "settecentodue" -> [702]. */
     fun tokens(text: String): List<String> {

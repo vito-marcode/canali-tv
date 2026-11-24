@@ -70,6 +70,15 @@ class VoiceMatchTest {
         assertEquals("36", lcn("metti rtl"))
     }
 
+    @Test fun glued_number_words() {
+        assertEquals("1", lcn("metti Raiuno"))
+        assertEquals("2", lcn("metti raidue"))
+        assertEquals("6", lcn("metti italiauno"))
+        assertEquals("4", lcn("metti retequattro"))
+        assertEquals("5", lcn("metti canalecinque"))
+        assertNull(lcn("metti il prodotto"))
+    }
+
     @Test fun spelling_slips() {
         assertEquals("52", lcn("metti di max"))
         assertEquals("31", lcn("metti real taim"))
