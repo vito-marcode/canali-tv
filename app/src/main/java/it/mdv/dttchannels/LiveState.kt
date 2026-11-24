@@ -4,7 +4,6 @@ import android.content.SharedPreferences
 import android.media.tv.TvTrackInfo
 import android.view.KeyEvent
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -31,9 +30,6 @@ interface Player {
     fun timeShiftPause()
     fun timeShiftResume()
     fun timeShiftSeekTo(timeMs: Long)
-    /** Mic key: start in-app speech recognition (asks for the microphone permission the first time). */
-    fun startVoice()
-    fun cancelVoice()
 }
 
 const val EPG_SPAN = 150 * 60L          // visible window: 150 min
@@ -89,10 +85,6 @@ class LiveState(
     var digits by mutableStateOf(""); private set
     var toast by mutableStateOf<String?>(null); private set
     var busy by mutableStateOf<String?>(null); private set
-    /** Voice search: null when idle, else what has been heard so far ("" = listening, nothing yet). */
-    var voice by mutableStateOf<String?>(null); private set
-    /** Mic level (dB from the recogniser), read in the draw phase only. */
-    val voiceLevel = mutableFloatStateOf(0f)
 
     var listFocus by mutableIntStateOf(0); private set
     var quickFocus by mutableIntStateOf(0); private set
@@ -555,17 +547,7 @@ class LiveState(
         if (i >= 0) { closeOverlay(); tuneIndex(i) } else showToast("Canale non disponibile")
     }
 
-    // ------------------------------------------------------------ voice
-
-    fun onVoiceStart() {
-        cancelDigits(); hideOsd(); voiceLevel.floatValue = 0f; voice = ""
-        val list = channels
-        scope.launch(Dispatchers.Default) { VoiceMatch.prepare(list) }   // ready before the user stops speaking
-    }
-    fun onVoicePartial(text: String) { if (voice != null) voice = text }
-    fun onVoiceLevel(db: Float) { voiceLevel.floatValue = db }
-    fun onVoiceError(msg: String) { voice = null; if (msg.isNotEmpty()) showToast(msg) }
-    fun onVoiceResults(phrases: List<String>) { voice = null; tuneByPhrase(phrases) }
+    // ------------------------------------------------------------ voice (phrases come from the launcher)
 
     /**
      * "Metti Rai 2", "rai due", "il canale 5": tunes the channel named in the first hypothesis that matches one
@@ -611,11 +593,6 @@ class LiveState(
 
     /** Returns true when the key was consumed. Only ACTION_DOWN events are passed in. */
     fun onKey(code: Int): Boolean {
-        if (code in MIC) { player.startVoice(); return true }
-        if (voice != null) {                             // listening: any key stops it, BACK only does that
-            player.cancelVoice(); voice = null
-            if (code == KeyEvent.KEYCODE_BACK) return true
-        }
         val d = digitOf(code)
         if (d != null && overlay != Overlay.SETTINGS) { digit(d); return true }
         // delayed: OK only drives the timeshift (bar / Riprendi / Torna in diretta), it never changes channel
@@ -853,12 +830,6 @@ class LiveState(
     }
 
     companion object {
-        /**
-         * Mic key. The TIM v2 remote sends KEY_SEARCH (217), which its key layout
-         * (Telecomando_TIM_v2.kl) maps to F10, unused by the system; other remotes send SEARCH.
-         * The Google key is ASSIST: the system keeps it for Google search.
-         */
-        val MIC = setOf(KeyEvent.KEYCODE_F10, KeyEvent.KEYCODE_SEARCH)
         val OK = setOf(KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_NUMPAD_ENTER)
         val CH_UP = setOf(KeyEvent.KEYCODE_CHANNEL_UP, KeyEvent.KEYCODE_PAGE_UP)
         val CH_DOWN = setOf(KeyEvent.KEYCODE_CHANNEL_DOWN, KeyEvent.KEYCODE_PAGE_DOWN)

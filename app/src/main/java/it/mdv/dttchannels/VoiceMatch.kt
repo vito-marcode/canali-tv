@@ -30,9 +30,6 @@ object VoiceMatch {
     private fun index(channels: List<Channel>): Index =
         index?.takeIf { it.channels === channels } ?: Index(channels).also { index = it }
 
-    /** Builds the index ahead of time (call off the main thread while the user is still speaking). */
-    fun prepare(channels: List<Channel>) { if (channels.isNotEmpty()) index(channels) }
-
     /** Drops the index (≈100 KB) when the app is trimmed in the background. */
     fun release() { index = null }
 

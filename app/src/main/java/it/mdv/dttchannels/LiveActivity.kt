@@ -1,11 +1,9 @@
 package it.mdv.dttchannels
 
-import android.Manifest
 import android.app.SearchManager
 import android.content.ComponentCallbacks2
 import android.content.ComponentName
 import android.content.Intent
-import android.content.pm.PackageManager
 import android.graphics.Color
 import android.media.tv.TvTrackInfo
 import android.media.tv.TvView
@@ -26,14 +24,12 @@ import it.mdv.dttchannels.ui.LiveRoot
  *  .MainActivity  launcher "Canali TV"     -> last channel
  *  .PlayerActivity / action it.mdv.dttchannels.PLAY, extras: number (LCN String), index (Int) or query (spoken
  *                   phrase, "metti rai due"); also android.media.action.MEDIA_PLAY_FROM_SEARCH (SearchManager.QUERY)
- * The remote's mic key (F10 on the TIM v2 remote, SEARCH on others) starts in-app voice search: see VoiceInput / VoiceMatch.
+ * Voice commands come from the launcher (com.gathin.tvhome, mic key): it resolves a phrase with the provider's ?q= and
+ * sends PLAY with the channel number. VoiceMatch does the matching.
  */
 class LiveActivity : ComponentActivity(), Player {
     private lateinit var tv: TvView
     private lateinit var state: LiveState
-    private lateinit var voice: VoiceInput
-    /** When the mic key went down: a long hold is push-to-talk, releasing it ends the phrase. */
-    private var micDownAt = 0L
     private val consumedDown = HashSet<Int>()
     /** Debug only: draw the UI without tuning (live video blocks screenshots on this box). */
     private var preview = false
@@ -50,7 +46,6 @@ class LiveActivity : ComponentActivity(), Player {
 
         preview = BuildConfig.DEBUG && intent?.getBooleanExtra("preview", false) == true
         state = LiveState(Repository(this), getSharedPreferences("dtt", 0), lifecycleScope, this)
-        voice = VoiceInput(this, state)
         tv.setCallback(object : TvView.TvInputCallback() {
             override fun onVideoAvailable(inputId: String) = state.onVideoAvailable()
             override fun onVideoUnavailable(inputId: String, reason: Int) = state.onVideoUnavailable(reason)
@@ -100,7 +95,6 @@ class LiveActivity : ComponentActivity(), Player {
     private var stopped = false
     override fun onStop() {
         super.onStop(); stopped = true; tv.reset()
-        if (voice.active || state.voice != null) { voice.cancel(); state.onVoiceError("") }
     }
 
     /**
@@ -130,15 +124,6 @@ class LiveActivity : ComponentActivity(), Player {
 
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
         val code = event.keyCode
-        // mic key: held down it auto-repeats (and would open Google search on a long press): one session per press
-        if (code in LiveState.MIC) {
-            if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) {
-                Log.i(TAG, "mic key ${KeyEvent.keyCodeToString(code)} from ${event.device?.name}")
-                micDownAt = event.eventTime; state.onKey(code)
-            }
-            if (event.action == KeyEvent.ACTION_UP && event.eventTime - micDownAt > 800) voice.finish()
-            return true
-        }
         if (BuildConfig.DEBUG && event.action == KeyEvent.ACTION_DOWN)
             Log.d(TAG, "key code=$code (${KeyEvent.keyCodeToString(code)}) scan=${event.scanCode} device=${event.device?.name}")
         if (event.action == KeyEvent.ACTION_DOWN) {
@@ -178,22 +163,6 @@ class LiveActivity : ComponentActivity(), Player {
         }
     }
 
-    // ---------------------------------------------------------------- voice
-
-    override fun startVoice() {
-        if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) voice.start()
-        else requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO), REQ_MIC)
-    }
-
-    override fun cancelVoice() = voice.cancel()
-
-    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<String>, grantResults: IntArray) {
-        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        if (requestCode != REQ_MIC) return
-        if (grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED) voice.start()
-        else state.onVoiceError("Senza il microfono la ricerca vocale non funziona")
-    }
-
     override fun startScan() {
         try {
             startActivity(Intent(Intent.ACTION_MAIN).setComponent(
@@ -201,5 +170,5 @@ class LiveActivity : ComponentActivity(), Player {
         } catch (e: Exception) { Log.w(TAG, "scan screen unavailable", e) }
     }
 
-    companion object { const val TAG = "DttLive"; private const val REQ_MIC = 7 }
+    companion object { const val TAG = "DttLive" }
 }
