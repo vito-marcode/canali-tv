@@ -40,6 +40,7 @@ const val LIST_PAGE = 10                // CH± jump in the channel list
 const val TS_LIVE_SLACK = 3_000L        // closer than this to live counts as live
 const val TS_SETTLE_MS = 400L           // timeshift: at most one player command per burst of keys
 const val ZAP_SETTLE_MS = 350L          // CH±: tune only after the presses stop for this long
+const val START_TUNE_DEFER_MS = 200L    // first tune at launch: a PLAY arriving right after replaces it
 
 /**
  * Single source of truth for the live-TV UI. Keys come from LiveActivity.dispatchKeyEvent;
@@ -148,7 +149,9 @@ class LiveState(
         // Critical path first: channels.json is small (one read, a few ms), so we can tune right away.
         // The EPG (MBs) is parsed in the background; the UI shows skeletons until it lands.
         applyChannels(repo.channels())
-        if (channels.isEmpty()) openSettings() else tuneInitial(requestedLcn, requestedIndex)
+        // the first tune waits a moment: an app restored from a killed process gets its launch intent here and the
+        // caller's PLAY right after (onNewIntent), and two tunes 40 ms apart can crash the box's video decoder
+        if (channels.isEmpty()) openSettings() else tuneInitial(requestedLcn, requestedIndex, START_TUNE_DEFER_MS)
         scope.launch { loadEpg() }
         scope.launch { while (true) { now = nowSec(); delay(15_000) } }
         scope.launch {                                   // keep the EPG fresh (Pi rebuilds it every 4 h)
@@ -169,11 +172,11 @@ class LiveState(
         }
     }
 
-    fun tuneInitial(lcn: String?, index: Int?) {
+    fun tuneInitial(lcn: String?, index: Int?, deferMs: Long = 0) {
         if (channels.isEmpty()) return
         val byNumber = lcn?.let { byLcn[it] }
         val last = prefs.getLong("last_id", -1).let { id -> channels.indexOfFirst { it.id == id } }.takeIf { it >= 0 }
-        tuneIndex(byNumber ?: index?.coerceIn(0, channels.lastIndex) ?: last ?: firstTv())
+        tuneIndex(byNumber ?: index?.coerceIn(0, channels.lastIndex) ?: last ?: firstTv(), deferMs)
     }
 
     private fun applyChannels(list: List<Channel>) {
