@@ -18,11 +18,30 @@ import java.text.Normalizer
  * Ties go to the lowest LCN (TV before radio). Last resort: one or two letters off, never different digits.
  */
 object VoiceMatch {
-    fun find(phrase: String, channels: List<Channel>): Channel? {
-        if (channels.isEmpty()) return null
+    /** Channel names tokenised once per channel list (≈300 names): a search then only tokenises the phrase. */
+    private class Index(val channels: List<Channel>) {
         val byLcn = channels.sortedWith(compareBy({ it.lcnInt }, { it.lcn }))
         val names = byLcn.map { it to tokens(it.name) }.filter { it.second.isNotEmpty() }
-        val q = unglue(tokens(phrase), names.flatMapTo(HashSet()) { it.second })
+        val words: Set<String> = names.flatMapTo(HashSet()) { it.second }
+    }
+
+    @Volatile private var index: Index? = null
+
+    private fun index(channels: List<Channel>): Index =
+        index?.takeIf { it.channels === channels } ?: Index(channels).also { index = it }
+
+    /** Builds the index ahead of time (call off the main thread while the user is still speaking). */
+    fun prepare(channels: List<Channel>) { if (channels.isNotEmpty()) index(channels) }
+
+    /** Drops the index (≈100 KB) when the app is trimmed in the background. */
+    fun release() { index = null }
+
+    fun find(phrase: String, channels: List<Channel>): Channel? {
+        if (channels.isEmpty()) return null
+        val ix = index(channels)
+        val byLcn = ix.byLcn
+        val names = ix.names
+        val q = unglue(tokens(phrase), ix.words)
         if (q.isEmpty()) return null
 
         for (len in q.size downTo 1) {
@@ -73,9 +92,13 @@ object VoiceMatch {
     }
 
     /** "Metti Rai2 HD!" -> [metti, rai, 2]; "settecentodue" -> [702]. */
+    private val MARKS = Regex("\\p{M}+")
+    private val SPLIT = Regex("[^a-z0-9]+|(?<=[a-z])(?=[0-9])|(?<=[0-9])(?=[a-z])")
+
     fun tokens(text: String): List<String> {
-        val plain = Normalizer.normalize(text.lowercase(), Normalizer.Form.NFD).replace(Regex("\\p{M}+"), "")
-        return plain.split(Regex("[^a-z0-9]+|(?<=[a-z])(?=[0-9])|(?<=[0-9])(?=[a-z])"))
+        val low = text.lowercase()
+        val plain = if (low.all { it.code < 128 }) low else Normalizer.normalize(low, Normalizer.Form.NFD).replace(MARKS, "")
+        return plain.split(SPLIT)
             .filter { it.isNotEmpty() && it != "hd" }
             .map { number(it)?.toString() ?: it }
     }

@@ -557,7 +557,11 @@ class LiveState(
 
     // ------------------------------------------------------------ voice
 
-    fun onVoiceStart() { cancelDigits(); hideOsd(); voiceLevel.floatValue = 0f; voice = "" }
+    fun onVoiceStart() {
+        cancelDigits(); hideOsd(); voiceLevel.floatValue = 0f; voice = ""
+        val list = channels
+        scope.launch(Dispatchers.Default) { VoiceMatch.prepare(list) }   // ready before the user stops speaking
+    }
     fun onVoicePartial(text: String) { if (voice != null) voice = text }
     fun onVoiceLevel(db: Float) { voiceLevel.floatValue = db }
     fun onVoiceError(msg: String) { voice = null; if (msg.isNotEmpty()) showToast(msg) }
@@ -568,7 +572,9 @@ class LiveState(
      * (the recogniser returns several spellings). Also used by PLAY / MEDIA_PLAY_FROM_SEARCH intents with a query.
      */
     fun tuneByPhrase(phrases: List<String>): Boolean {
+        val t0 = System.nanoTime()
         val ch = phrases.firstNotNullOfOrNull { VoiceMatch.find(it, channels) }
+        android.util.Log.i("DttLive", "voice match ${phrases.firstOrNull()} -> ${ch?.lcn} in ${(System.nanoTime() - t0) / 1_000_000} ms")
         if (ch == null) {
             phrases.firstOrNull()?.let { showToast("Nessun canale per «$it»") } ?: showToast("Non ho sentito un canale, riprova")
             return false

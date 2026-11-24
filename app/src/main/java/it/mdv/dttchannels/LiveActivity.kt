@@ -114,6 +114,7 @@ class LiveActivity : ComponentActivity(), Player {
         if (!hidden || level < ComponentCallbacks2.TRIM_MEMORY_RUNNING_CRITICAL) return
         if (stopped && (level >= ComponentCallbacks2.TRIM_MEMORY_BACKGROUND || level == ComponentCallbacks2.TRIM_MEMORY_RUNNING_CRITICAL))
             state.releaseEpg()
+        VoiceMatch.release()
         imageLoader.memoryCache?.clear()
         Runtime.getRuntime().gc()
     }
