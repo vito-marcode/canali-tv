@@ -60,7 +60,7 @@ Stop or the TIM remote's blue circle key goes back to live. The Technicolor tune
 starts recording at the first pause, so you can go back only as far as that pause, and "live" means a re-tune.
 Leaving the app while delayed asks for a second Back, because the recording is dropped.
 
-**Voice search.** While Canali TV is on screen, the remote's mic key (it sends `KEYCODE_SEARCH`) starts the box's
+**Voice search.** While Canali TV is on screen, the remote's mic key (the TIM v2 remote sends it as `F10`, see `Telecomando_TIM_v2.kl`; other remotes `SEARCH`) starts the box's
 Google speech recogniser inside the app, so the picture keeps playing. Tap and speak, or hold the key while speaking
 and release it at the end. A card shows what has been heard. The phrase is matched to a channel by
 `VoiceMatch`: names and Italian number words are compared in the same normalised form ("Rai2", "rai due" and

@@ -26,7 +26,7 @@ import it.mdv.dttchannels.ui.LiveRoot
  *  .MainActivity  launcher "Canali TV"     -> last channel
  *  .PlayerActivity / action it.mdv.dttchannels.PLAY, extras: number (LCN String), index (Int) or query (spoken
  *                   phrase, "metti rai due"); also android.media.action.MEDIA_PLAY_FROM_SEARCH (SearchManager.QUERY)
- * The remote's mic key (KEYCODE_SEARCH) starts in-app voice search: see VoiceInput / VoiceMatch.
+ * The remote's mic key (F10 on the TIM v2 remote, SEARCH on others) starts in-app voice search: see VoiceInput / VoiceMatch.
  */
 class LiveActivity : ComponentActivity(), Player {
     private lateinit var tv: TvView
@@ -130,8 +130,11 @@ class LiveActivity : ComponentActivity(), Player {
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
         val code = event.keyCode
         // mic key: held down it auto-repeats (and would open Google search on a long press): one session per press
-        if (code == KeyEvent.KEYCODE_SEARCH) {
-            if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) { micDownAt = event.eventTime; state.onKey(code) }
+        if (code in LiveState.MIC) {
+            if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) {
+                Log.i(TAG, "mic key ${KeyEvent.keyCodeToString(code)} from ${event.device?.name}")
+                micDownAt = event.eventTime; state.onKey(code)
+            }
             if (event.action == KeyEvent.ACTION_UP && event.eventTime - micDownAt > 800) voice.finish()
             return true
         }

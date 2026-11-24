@@ -605,7 +605,7 @@ class LiveState(
 
     /** Returns true when the key was consumed. Only ACTION_DOWN events are passed in. */
     fun onKey(code: Int): Boolean {
-        if (code == KeyEvent.KEYCODE_SEARCH) { player.startVoice(); return true }
+        if (code in MIC) { player.startVoice(); return true }
         if (voice != null) {                             // listening: any key stops it, BACK only does that
             player.cancelVoice(); voice = null
             if (code == KeyEvent.KEYCODE_BACK) return true
@@ -847,6 +847,12 @@ class LiveState(
     }
 
     companion object {
+        /**
+         * Mic key. The TIM v2 remote sends KEY_SEARCH (217), which its key layout
+         * (Telecomando_TIM_v2.kl) maps to F10, unused by the system; other remotes send SEARCH.
+         * The Google key is ASSIST: the system keeps it for Google search.
+         */
+        val MIC = setOf(KeyEvent.KEYCODE_F10, KeyEvent.KEYCODE_SEARCH)
         val OK = setOf(KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_NUMPAD_ENTER)
         val CH_UP = setOf(KeyEvent.KEYCODE_CHANNEL_UP, KeyEvent.KEYCODE_PAGE_UP)
         val CH_DOWN = setOf(KeyEvent.KEYCODE_CHANNEL_DOWN, KeyEvent.KEYCODE_PAGE_DOWN)
