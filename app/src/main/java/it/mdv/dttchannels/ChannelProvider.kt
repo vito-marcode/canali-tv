@@ -28,7 +28,8 @@ class ChannelProvider : ContentProvider() {
 
     @Synchronized private fun channels(): List<Channel> {
         val f = File(context!!.filesDir, "channels.json")
-        val stamp = f.lastModified() * 31 + f.length()
+        // channels.json (Pi) or, without it, the TV provider's list; the "lcns" filter changes the result too
+        val stamp = (f.lastModified() * 31 + f.length()) * 31 + Repository.lcnFilter(context!!).hashCode()
         cached?.takeIf { it.first == stamp }?.let { return it.second }
         return Repository.readChannels(context!!).also { cached = stamp to it }
     }

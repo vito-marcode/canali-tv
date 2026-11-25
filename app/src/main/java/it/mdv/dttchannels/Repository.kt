@@ -2,6 +2,7 @@ package it.mdv.dttchannels
 
 import android.content.Context
 import android.content.Intent
+import android.media.tv.TvContract
 import android.net.Uri
 import android.util.JsonReader
 import android.util.JsonToken
@@ -26,13 +27,57 @@ class Repository(private val ctx: Context) {
         fun piUrl(ctx: Context): String =
             ctx.getSharedPreferences("dtt", 0).getString("pi", BuildConfig.PI_URL) ?: BuildConfig.PI_URL
 
-        /** Used by the ContentProvider too (no instance state). */
+        /**
+         * Used by the ContentProvider too (no instance state). The Pi's channels.json when there is one; otherwise the
+         * TV provider's broadcast channels (a box with no Pi). Either way only the LCNs in the "lcns" setting, if set.
+         */
         fun readChannels(ctx: Context): List<Channel> {
             val f = File(ctx.filesDir, "channels.json")
-            if (!f.exists()) return emptyList()
-            return try { parseChannels(JSONObject(f.readText()), piUrl(ctx)) } catch (e: Exception) {
-                Log.w(TAG, "bad channels.json", e); emptyList()
+            val all = if (!f.exists()) systemChannels(ctx)
+                else try { parseChannels(JSONObject(f.readText()), piUrl(ctx)) } catch (e: Exception) {
+                    Log.w(TAG, "bad channels.json", e); emptyList()
+                }
+            val keep = lcnFilter(ctx)
+            return if (keep.isEmpty()) all else all.filter { it.lcn in keep }.distinctBy { it.lcn }
+        }
+
+        /** "lcns" setting: the channel numbers to show ("1,2,3,26"), empty for all. Set with MainActivity --es lcns. */
+        fun lcnFilter(ctx: Context): Set<String> =
+            ctx.getSharedPreferences("dtt", 0).getString("lcns", "").orEmpty()
+                .split(',', ' ').map { it.trim().trimStart('0') }.filter { it.isNotEmpty() }.toSet()
+
+        /**
+         * Broadcast channels straight from the TV provider (needs READ_TV_LISTINGS): for a box without the Pi companion,
+         * e.g. a TIMVISION box whose Sagemcom input publishes its DVB-T services there. Logos come from the provider.
+         */
+        private fun systemChannels(ctx: Context): List<Channel> {
+            val out = ArrayList<Channel>()
+            try {
+                ctx.contentResolver.query(TvContract.Channels.CONTENT_URI, arrayOf(
+                    TvContract.Channels._ID, TvContract.Channels.COLUMN_DISPLAY_NUMBER, TvContract.Channels.COLUMN_DISPLAY_NAME,
+                    TvContract.Channels.COLUMN_INPUT_ID, TvContract.Channels.COLUMN_TYPE, TvContract.Channels.COLUMN_SERVICE_TYPE,
+                    TvContract.Channels.COLUMN_ORIGINAL_NETWORK_ID, TvContract.Channels.COLUMN_TRANSPORT_STREAM_ID,
+                    TvContract.Channels.COLUMN_SERVICE_ID, TvContract.Channels.COLUMN_BROWSABLE,
+                ), null, null, null)?.use { c ->
+                    while (c.moveToNext()) {
+                        val type = c.getString(4).orEmpty()
+                        if (!type.startsWith("TYPE_DVB") && !type.startsWith("TYPE_ATSC") && !type.startsWith("TYPE_ISDB")) continue
+                        val id = c.getLong(0)
+                        out += Channel(
+                            id = id, lcn = c.getString(1).orEmpty(), name = c.getString(2).orEmpty(),
+                            inputId = c.getString(3).orEmpty(), uri = TvContract.buildChannelUri(id).toString(),
+                            radio = c.getString(5) == TvContract.Channels.SERVICE_TYPE_AUDIO,
+                            logo = TvContract.buildChannelLogoUri(id).toString(),
+                            onid = c.getInt(6), tsid = c.getInt(7), sid = c.getInt(8), browsable = c.getInt(9) != 0,
+                        )
+                    }
+                }
+            } catch (e: SecurityException) {
+                Log.w(TAG, "no READ_TV_LISTINGS: pm grant it.mdv.dttchannels android.permission.READ_TV_LISTINGS", e)
+            } catch (e: Exception) {
+                Log.w(TAG, "system channels", e)
             }
+            return out.filter { it.browsable }.sortedWith(compareBy({ it.lcnInt }, { it.lcn }))
         }
 
         private fun parseChannels(doc: JSONObject, pi: String): List<Channel> {
@@ -63,7 +108,7 @@ class Repository(private val ctx: Context) {
      */
     fun epg(): Map<Long, List<Programme>> {
         val f = File(ctx.filesDir, "epg.json")
-        if (!f.exists()) return emptyMap()
+        if (!f.exists()) return systemEpg()
         return try {
             JsonReader(f.bufferedReader(bufferSize = 64 * 1024)).use { r ->
                 val pool = StringPool()
@@ -98,6 +143,39 @@ class Repository(private val ctx: Context) {
     private class StringPool {
         private val map = HashMap<String, String>(4096)
         operator fun invoke(s: String): String = map.getOrPut(s) { s }
+    }
+
+    /**
+     * No Pi: the guide the broadcast input itself publishes to the TV provider (DVB EIT, e.g. the TIMVISION box's
+     * Sagemcom input), 6 h back to 48 h ahead, keyed by channel id like epg.json. Same string pooling.
+     */
+    private fun systemEpg(): Map<Long, List<Programme>> {
+        val now = System.currentTimeMillis()
+        val out = HashMap<Long, ArrayList<Programme>>()
+        val pool = StringPool()
+        try {
+            ctx.contentResolver.query(TvContract.Programs.CONTENT_URI, arrayOf(
+                TvContract.Programs.COLUMN_CHANNEL_ID, TvContract.Programs.COLUMN_START_TIME_UTC_MILLIS,
+                TvContract.Programs.COLUMN_END_TIME_UTC_MILLIS, TvContract.Programs.COLUMN_TITLE,
+                TvContract.Programs.COLUMN_SHORT_DESCRIPTION, TvContract.Programs.COLUMN_LONG_DESCRIPTION,
+                TvContract.Programs.COLUMN_CANONICAL_GENRE, TvContract.Programs.COLUMN_POSTER_ART_URI,
+                TvContract.Programs.COLUMN_EPISODE_TITLE,
+            ), null, null, null)?.use { c ->   // no selection: the provider refuses one from a non-system app
+                val from = (now - 6 * 3600_000L) / 1000; val to = (now + 48 * 3600_000L) / 1000
+                while (c.moveToNext()) {
+                    val s = c.getLong(1) / 1000; val e = c.getLong(2) / 1000
+                    if (e <= s || e <= from || s >= to) continue
+                    val desc = c.getString(5)?.takeIf { it.isNotBlank() } ?: c.getString(4).orEmpty()
+                    val genre = TvContract.Programs.Genres.decode(c.getString(6).orEmpty()).firstOrNull().orEmpty()
+                    out.getOrPut(c.getLong(0)) { ArrayList() } += Programme(s, e, pool(c.getString(3).orEmpty()),
+                        pool(genre), pool(desc), c.getString(7)?.takeIf { it.isNotBlank() }?.let(pool::invoke),
+                        c.getString(8)?.takeIf { it.isNotBlank() }?.let(pool::invoke))
+                }
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "system epg", e)
+        }
+        return out.mapValues { (_, l) -> l.sortedBy { it.start } }
     }
 
     private fun readProgramme(r: JsonReader, pool: StringPool): Programme? {

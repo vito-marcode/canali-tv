@@ -47,8 +47,12 @@ class LiveActivity : ComponentActivity(), Player {
         preview = BuildConfig.DEBUG && intent?.getBooleanExtra("preview", false) == true
         state = LiveState(Repository(this), getSharedPreferences("dtt", 0), lifecycleScope, this)
         tv.setCallback(object : TvView.TvInputCallback() {
-            override fun onVideoAvailable(inputId: String) = state.onVideoAvailable()
-            override fun onVideoUnavailable(inputId: String, reason: Int) = state.onVideoUnavailable(reason)
+            override fun onVideoAvailable(inputId: String) {
+                Log.i(TAG, "video available after ${System.currentTimeMillis() - tunedAt} ms"); state.onVideoAvailable()
+            }
+            override fun onVideoUnavailable(inputId: String, reason: Int) {
+                Log.i(TAG, "video unavailable reason=$reason"); state.onVideoUnavailable(reason)
+            }
             override fun onConnectionFailed(inputId: String) { Log.w(TAG, "connection failed"); state.onConnectionLost() }
             override fun onDisconnected(inputId: String) { Log.w(TAG, "disconnected"); state.onConnectionLost() }
             override fun onTracksChanged(inputId: String, tracks: MutableList<TvTrackInfo>) = state.onTracks(tracks)
@@ -115,6 +119,8 @@ class LiveActivity : ComponentActivity(), Player {
 
     private fun requested(i: Intent?): Pair<String?, Int?> {
         if (i == null) return null to null
+        // which channel numbers to show ("1,2,3,26"; "" for all): am start -n it.mdv.dttchannels/.MainActivity --es lcns ...
+        i.getStringExtra("lcns")?.let { getSharedPreferences("dtt", 0).edit().putString("lcns", it).commit() }
         val lcn = i.getStringExtra("number")
         val idx = if (i.hasExtra("index")) i.getIntExtra("index", 0) else null
         return lcn to idx
@@ -135,10 +141,23 @@ class LiveActivity : ComponentActivity(), Player {
 
     // ---------------------------------------------------------------- Player
 
+    /** When the last tune was asked: the "video available" log gives the zap time. */
+    private var tunedAt = 0L
+
     override fun tune(ch: Channel) {
+        tunedAt = System.currentTimeMillis()
         Log.i(TAG, "tune ${ch.lcn} ${ch.name} ${ch.uri}" + if (preview) " (preview, not tuned)" else "")
         if (preview) { tv.postDelayed({ if (!ch.radio) { state.onVideoAvailable(); fakeTs.start() } }, 300); return }
-        tv.tune(ch.inputId, Uri.parse(ch.uri))
+        val uri = Uri.parse(ch.uri)
+        if (ch.inputId != SAGEMCOM_INPUT) { tv.tune(ch.inputId, uri); return }
+        // TIMVISION box: the Sagemcom input tunes only for a caller that names one of its supported TV apps in the
+        // tune params, and this firmware's TvView.tune() writes our own package name there. With no session open,
+        // TvView keeps this same Bundle and sends it only once the new session is created (a later main-thread
+        // message), so naming the TIM app right after tune() is what the input receives. Hence a fresh session per tune.
+        tv.reset()
+        val params = Bundle()
+        tv.tune(ch.inputId, uri, params)
+        params.putString(SAGEMCOM_CALLER_KEY, "timvision.launcher")
     }
 
     override fun selectTrack(type: Int, id: String?) = tv.selectTrack(type, id)
@@ -170,5 +189,10 @@ class LiveActivity : ComponentActivity(), Player {
         } catch (e: Exception) { Log.w(TAG, "scan screen unavailable", e) }
     }
 
-    companion object { const val TAG = "DttLive" }
+    companion object {
+        const val TAG = "DttLive"
+        /** The TIMVISION box's DVB-T input and the tune param it checks (supported_tvapps_list: the TIM app is one). */
+        private const val SAGEMCOM_INPUT = "com.sagemcom.stb.tvinput/.StbTvInputService/HW42"
+        private const val SAGEMCOM_CALLER_KEY = "com.sagemcom.stb.callingPackageName"
+    }
 }
