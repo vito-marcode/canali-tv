@@ -160,7 +160,7 @@ class LiveState(
             var first = true
             while (true) {
                 if (first || repo.epgAgeSeconds() > 2 * 3600 || channels.isEmpty()) runCatching {
-                    val (chChanged, epgChanged) = withContext(Dispatchers.IO) { repo.refreshFromPi() }
+                    val (chChanged, epgChanged) = withContext(Dispatchers.IO) { repo.refresh(channels) }
                     val hadNone = channels.isEmpty()
                     if (chChanged) reloadChannels()
                     if (epgChanged) loadEpg()

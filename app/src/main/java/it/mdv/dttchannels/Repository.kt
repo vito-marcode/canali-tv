@@ -52,6 +52,7 @@ class Repository(private val ctx: Context) {
          */
         private fun systemChannels(ctx: Context): List<Channel> {
             val out = ArrayList<Channel>()
+            val logos = OnlineGuide.logos(ctx)               // tv-logos by name, as the Pi picks them
             try {
                 ctx.contentResolver.query(TvContract.Channels.CONTENT_URI, arrayOf(
                     TvContract.Channels._ID, TvContract.Channels.COLUMN_DISPLAY_NUMBER, TvContract.Channels.COLUMN_DISPLAY_NAME,
@@ -67,7 +68,7 @@ class Repository(private val ctx: Context) {
                             id = id, lcn = c.getString(1).orEmpty(), name = c.getString(2).orEmpty(),
                             inputId = c.getString(3).orEmpty(), uri = TvContract.buildChannelUri(id).toString(),
                             radio = c.getString(5) == TvContract.Channels.SERVICE_TYPE_AUDIO,
-                            logo = TvContract.buildChannelLogoUri(id).toString(),
+                            logo = logos[c.getString(1).orEmpty()] ?: TvContract.buildChannelLogoUri(id).toString(),
                             onid = c.getInt(6), tsid = c.getInt(7), sid = c.getInt(8), browsable = c.getInt(9) != 0,
                         )
                     }
@@ -106,9 +107,25 @@ class Repository(private val ctx: Context) {
      * Streaming parse of epg.json (54 h × every channel: several MB). Far cheaper in time and memory
      * than building an org.json tree; still call it off the main thread.
      */
+    /** No Pi on this box: channels from the TV provider, guide and logos built here (OnlineGuide). */
+    private val noPi: Boolean get() = !File(ctx.filesDir, "channels.json").exists()
+
+    /**
+     * Periodic refresh: from the Pi, or without one the online guide and logos built on the box. Blocking.
+     * Returns which of channels / guide changed.
+     */
+    fun refresh(channels: List<Channel>): Pair<Boolean, Boolean> =
+        if (noPi) OnlineGuide.refresh(ctx, channels).also { (logos, _) -> if (logos) notifyUpdated(-1) } else refreshFromPi()
+
     fun epg(): Map<Long, List<Programme>> {
         val f = File(ctx.filesDir, "epg.json")
         if (!f.exists()) return systemEpg()
+        // no Pi: the XMLTV guide, plus the input's own now/next for the channels the XMLTV doesn't cover
+        if (noPi) return systemEpg() + epgFile(f)
+        return epgFile(f)
+    }
+
+    private fun epgFile(f: File): Map<Long, List<Programme>> {
         return try {
             JsonReader(f.bufferedReader(bufferSize = 64 * 1024)).use { r ->
                 val pool = StringPool()
@@ -175,6 +192,10 @@ class Repository(private val ctx: Context) {
         } catch (e: Exception) {
             Log.w(TAG, "system epg", e)
         }
+        val nowSec = now / 1000
+        Log.i(TAG, "system epg: ${out.size} channels, ${out.values.sumOf { it.size }} programmes, on now for " +
+            "${out.values.count { l -> l.any { nowSec in it.start until it.end } }}, until " +
+            "${(out.values.maxOfOrNull { l -> l.maxOf { it.end } } ?: nowSec).minus(nowSec) / 3600} h ahead")
         return out.mapValues { (_, l) -> l.sortedBy { it.start } }
     }
 
