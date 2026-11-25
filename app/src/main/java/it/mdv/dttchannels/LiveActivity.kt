@@ -93,12 +93,17 @@ class LiveActivity : ComponentActivity(), Player {
 
     override fun onStart() {
         super.onStart()
-        if (::state.isInitialized && stopped) { stopped = false; state.restoreEpg(); state.channel?.let { tune(it) } }
+        if (::state.isInitialized && stopped) {
+            stopped = false; state.restoreEpg()
+            // back on screen: retune the last channel a moment later, so a PLAY that brought us back (onNewIntent comes
+            // after onStart) replaces it instead of making two tunes in a row (see START_TUNE_DEFER_MS)
+            tv.postDelayed(resumeTune, START_TUNE_DEFER_MS)
+        }
     }
 
     private var stopped = false
     override fun onStop() {
-        super.onStop(); stopped = true; tv.reset()
+        super.onStop(); stopped = true; tv.removeCallbacks(resumeTune); tv.reset()
     }
 
     /**
@@ -143,8 +148,10 @@ class LiveActivity : ComponentActivity(), Player {
 
     /** When the last tune was asked: the "video available" log gives the zap time. */
     private var tunedAt = 0L
+    private val resumeTune = Runnable { state.channel?.let { tune(it) } }
 
     override fun tune(ch: Channel) {
+        tv.removeCallbacks(resumeTune)                  // any tune replaces a pending retune on return
         tunedAt = System.currentTimeMillis()
         Log.i(TAG, "tune ${ch.lcn} ${ch.name} ${ch.uri}" + if (preview) " (preview, not tuned)" else "")
         if (preview) { tv.postDelayed({ if (!ch.radio) { state.onVideoAvailable(); fakeTs.start() } }, 300); return }
