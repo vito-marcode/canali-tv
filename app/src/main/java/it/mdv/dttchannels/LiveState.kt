@@ -787,6 +787,11 @@ class LiveState(
     /** "Scansiona canali": the Pi enables timvision.telemetry first (the vendor scan crashes without it). */
     private fun startScan() {
         if (busy != null) return
+        if (repo.noPi) {                                 // no Pi (TIMVISION box): nothing to prepare, the scan app is enough
+            prefs.edit().putBoolean("sync_after_scan", true).apply()
+            player.startScan()
+            return
+        }
         busy = "Preparazione scansione…"
         scope.launch {
             val r = runCatching { withContext(Dispatchers.IO) { repo.scanPrepare() } }
@@ -800,7 +805,19 @@ class LiveState(
 
     /** Called from onResume: after the vendor scan screen, restore telemetry off and refresh the list. */
     fun onResume() {
-        if (prefs.getBoolean("sync_after_scan", false)) {
+        if (prefs.getBoolean("sync_after_scan", false) && repo.noPi) {
+            // back from the scan without a Pi: the channels are the TV provider's, reread them and rebuild the guide
+            prefs.edit().putBoolean("sync_after_scan", false).apply()
+            scope.launch {
+                busy = "Aggiornamento canali…"
+                reloadChannels()
+                runCatching { withContext(Dispatchers.IO) { repo.refresh(channels) } }
+                loadEpg()
+                busy = null
+                showToast("Aggiornati ${channels.size} canali")
+                if (current < 0 && channels.isNotEmpty()) tuneInitial(null, null)
+            }
+        } else if (prefs.getBoolean("sync_after_scan", false)) {
             prefs.edit().putBoolean("sync_after_scan", false).apply()
             overlay = Overlay.SETTINGS
             scope.launch {

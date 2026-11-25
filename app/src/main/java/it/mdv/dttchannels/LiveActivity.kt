@@ -189,16 +189,22 @@ class LiveActivity : ComponentActivity(), Player {
         }
     }
 
+    /** The box's own scan screen: Technicolor's (box with the Pi) or the TIMVISION box's DTT scanner app. */
     override fun startScan() {
-        try {
-            startActivity(Intent(Intent.ACTION_MAIN).setComponent(
-                ComponentName("com.technicolor.android.dtvinput", "com.technicolor.android.dtvinput.setup.SetupActivity")))
-        } catch (e: Exception) { Log.w(TAG, "scan screen unavailable", e) }
+        for (c in SCAN_SCREENS) {
+            try {
+                startActivity(Intent(Intent.ACTION_MAIN).setComponent(c)); return
+            } catch (e: Exception) { Log.w(TAG, "scan screen $c unavailable") }
+        }
     }
 
     companion object {
         const val TAG = "DttLive"
         /** The TIMVISION box's DVB-T input and the tune param it checks (supported_tvapps_list: the TIM app is one). */
+        private val SCAN_SCREENS = listOf(
+            ComponentName("com.technicolor.android.dtvinput", "com.technicolor.android.dtvinput.setup.SetupActivity"),
+            ComponentName("com.technicolor.android.dtvscan.project", "com.technicolor.android.dtvscan.project.MainActivity"),
+        )
         private const val SAGEMCOM_INPUT = "com.sagemcom.stb.tvinput/.StbTvInputService/HW42"
         private const val SAGEMCOM_CALLER_KEY = "com.sagemcom.stb.callingPackageName"
     }
