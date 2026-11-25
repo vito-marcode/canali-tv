@@ -808,15 +808,7 @@ class LiveState(
         if (prefs.getBoolean("sync_after_scan", false) && repo.noPi) {
             // back from the scan without a Pi: the channels are the TV provider's, reread them and rebuild the guide
             prefs.edit().putBoolean("sync_after_scan", false).apply()
-            scope.launch {
-                busy = "Aggiornamento canali…"
-                reloadChannels()
-                runCatching { withContext(Dispatchers.IO) { repo.refresh(channels) } }
-                loadEpg()
-                busy = null
-                showToast("Aggiornati ${channels.size} canali")
-                if (current < 0 && channels.isNotEmpty()) tuneInitial(null, null)
-            }
+            scope.launch { refreshLocal() }
         } else if (prefs.getBoolean("sync_after_scan", false)) {
             prefs.edit().putBoolean("sync_after_scan", false).apply()
             overlay = Overlay.SETTINGS
@@ -831,8 +823,33 @@ class LiveState(
      * Sincronizza (also runs after a scan). On success the guide is parsed first, then Impostazioni
      * closes and the Guida TV opens on the new data; on failure the user stays in Impostazioni.
      */
+    /** No Pi on this box (TIMVISION): channels from the TV provider, guide built here. */
+    val noPi: Boolean get() = repo.noPi
+
+    /** The tuner's maker, from the channels' TV input (Settings footer). */
+    val tunerVendor: String get() = channels.firstOrNull()?.inputId.orEmpty().let {
+        when { "sagemcom" in it -> "Sagemcom"; "technicolor" in it -> "Technicolor"; else -> "" }
+    }
+
+    /**
+     * No Pi: reread the channels from the TV provider and rebuild the online guide (forced, so it also follows a scan
+     * that renumbered the channels). After a scan and from "Sincronizza".
+     */
+    private suspend fun refreshLocal() {
+        busy = "Aggiornamento canali e guida…"
+        reloadChannels()
+        prefs.edit().remove("xmltv_etag").apply()
+        val r = runCatching { withContext(Dispatchers.IO) { repo.refresh(channels) } }
+        loadEpg()
+        busy = null
+        if (current < 0 && channels.isNotEmpty()) tuneInitial(null, null)
+        r.onSuccess { showToast("Aggiornati ${channels.size} canali e la guida TV") }
+            .onFailure { showToast("Canali aggiornati; guida non scaricata: ${it.message}") }
+    }
+
     fun sync() {
         if (busy != null) return
+        if (repo.noPi) { scope.launch { refreshLocal() }; return }
         busy = "Sincronizzazione in corso…"
         scope.launch {
             val r = runCatching { withContext(Dispatchers.IO) { repo.syncAll() } }

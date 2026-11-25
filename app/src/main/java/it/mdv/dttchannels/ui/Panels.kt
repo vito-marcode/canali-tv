@@ -145,11 +145,14 @@ fun SettingsScreen(s: LiveState, version: String) {
             SettingsTile("Scansiona canali", s.settingsFocus == 0, Modifier.weight(1f), icon = { c -> Box(Modifier.size(28.u).clip(RoundedCornerShape(99.u)).border(3f.u, c, RoundedCornerShape(99.u))) })
             SettingsTile("Sincronizza", s.settingsFocus == 1, Modifier.weight(1f), icon = { c -> Box(Modifier.size(24.u).rotate(45f).border(3f.u, c, RoundedCornerShape(4.u))) })
         }
-        val sub = s.busy ?: if (s.channels.isEmpty()) "Nessun canale: premi Sincronizza per scaricare la lista dal Raspberry" else
+        val sub = s.busy ?: if (s.channels.isEmpty()) {
+            if (s.noPi) "Nessun canale: premi Scansiona canali" else "Nessun canale: premi Sincronizza per scaricare la lista dal Raspberry"
+        } else
             "${s.channels.size} canali · guida TV per ${s.epg.size} canali"
         T(sub, 28, 500, Color.White.copy(alpha = .8f), modifier = Modifier.padding(start = 160.u, top = 650.u))
         Row(Modifier.align(Alignment.BottomStart).fillMaxWidth().padding(horizontal = 160.u, vertical = 96.u), horizontalArrangement = Arrangement.SpaceBetween) {
-            T("Sintonizzatore DVB-T2 · Technicolor · Versione $version", 24, color = Color.White.copy(alpha = .7f))
+            T(listOf("Sintonizzatore DVB-T2", s.tunerVendor, "Versione $version").filter { it.isNotEmpty() }.joinToString(" · "),
+                24, color = Color.White.copy(alpha = .7f))
             Hints("Indietro" to "Chiudi", color = Color.White.copy(alpha = .7f))
         }
     }
