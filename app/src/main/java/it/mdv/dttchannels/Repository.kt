@@ -21,6 +21,13 @@ import org.json.JSONObject
 class Repository(private val ctx: Context) {
     companion object {
         const val TAG = "DttRepo"
+        private val PROGRAMME_COLUMNS = arrayOf(
+            TvContract.Programs.COLUMN_CHANNEL_ID, TvContract.Programs.COLUMN_START_TIME_UTC_MILLIS,
+            TvContract.Programs.COLUMN_END_TIME_UTC_MILLIS, TvContract.Programs.COLUMN_TITLE,
+            TvContract.Programs.COLUMN_SHORT_DESCRIPTION, TvContract.Programs.COLUMN_LONG_DESCRIPTION,
+            TvContract.Programs.COLUMN_CANONICAL_GENRE, TvContract.Programs.COLUMN_POSTER_ART_URI,
+            TvContract.Programs.COLUMN_EPISODE_TITLE,
+        )
         val URI: Uri = Uri.parse("content://it.mdv.dttchannels/channels")
         const val ACTION_UPDATED = "it.mdv.dttchannels.CHANNELS_UPDATED"
 
@@ -108,7 +115,7 @@ class Repository(private val ctx: Context) {
      * than building an org.json tree; still call it off the main thread.
      */
     /** No Pi on this box: channels from the TV provider, guide and logos built here (OnlineGuide). */
-    private val noPi: Boolean get() = !File(ctx.filesDir, "channels.json").exists()
+    val noPi: Boolean get() = !File(ctx.filesDir, "channels.json").exists()
 
     /**
      * Periodic refresh: from the Pi, or without one the online guide and logos built on the box. Blocking.
@@ -171,22 +178,12 @@ class Repository(private val ctx: Context) {
         val out = HashMap<Long, ArrayList<Programme>>()
         val pool = StringPool()
         try {
-            ctx.contentResolver.query(TvContract.Programs.CONTENT_URI, arrayOf(
-                TvContract.Programs.COLUMN_CHANNEL_ID, TvContract.Programs.COLUMN_START_TIME_UTC_MILLIS,
-                TvContract.Programs.COLUMN_END_TIME_UTC_MILLIS, TvContract.Programs.COLUMN_TITLE,
-                TvContract.Programs.COLUMN_SHORT_DESCRIPTION, TvContract.Programs.COLUMN_LONG_DESCRIPTION,
-                TvContract.Programs.COLUMN_CANONICAL_GENRE, TvContract.Programs.COLUMN_POSTER_ART_URI,
-                TvContract.Programs.COLUMN_EPISODE_TITLE,
-            ), null, null, null)?.use { c ->   // no selection: the provider refuses one from a non-system app
+            ctx.contentResolver.query(TvContract.Programs.CONTENT_URI, PROGRAMME_COLUMNS, null, null, null)?.use { c ->   // no selection: the provider refuses one from a non-system app
                 val from = (now - 6 * 3600_000L) / 1000; val to = (now + 48 * 3600_000L) / 1000
                 while (c.moveToNext()) {
-                    val s = c.getLong(1) / 1000; val e = c.getLong(2) / 1000
-                    if (e <= s || e <= from || s >= to) continue
-                    val desc = c.getString(5)?.takeIf { it.isNotBlank() } ?: c.getString(4).orEmpty()
-                    val genre = TvContract.Programs.Genres.decode(c.getString(6).orEmpty()).firstOrNull().orEmpty()
-                    out.getOrPut(c.getLong(0)) { ArrayList() } += Programme(s, e, pool(c.getString(3).orEmpty()),
-                        pool(genre), pool(desc), c.getString(7)?.takeIf { it.isNotBlank() }?.let(pool::invoke),
-                        c.getString(8)?.takeIf { it.isNotBlank() }?.let(pool::invoke))
+                    val p = programme(c, pool) ?: continue
+                    if (p.end <= from || p.start >= to) continue
+                    out.getOrPut(c.getLong(0)) { ArrayList() } += p
                 }
             }
         } catch (e: Exception) {
@@ -197,6 +194,16 @@ class Repository(private val ctx: Context) {
             "${out.values.count { l -> l.any { nowSec in it.start until it.end } }}, until " +
             "${(out.values.maxOfOrNull { l -> l.maxOf { it.end } } ?: nowSec).minus(nowSec) / 3600} h ahead")
         return out.mapValues { (_, l) -> l.sortedBy { it.start } }
+    }
+
+    /** A row of [PROGRAMME_COLUMNS] as a Programme, or null when its times are unusable. */
+    private fun programme(c: android.database.Cursor, pool: StringPool): Programme? {
+        val s = c.getLong(1) / 1000; val e = c.getLong(2) / 1000
+        if (e <= s) return null
+        val desc = c.getString(5)?.takeIf { it.isNotBlank() } ?: c.getString(4).orEmpty()
+        val genre = TvContract.Programs.Genres.decode(c.getString(6).orEmpty()).firstOrNull().orEmpty()
+        return Programme(s, e, pool(c.getString(3).orEmpty()), pool(genre), pool(desc),
+            c.getString(7)?.takeIf { it.isNotBlank() }?.let(pool::invoke), c.getString(8)?.takeIf { it.isNotBlank() }?.let(pool::invoke))
     }
 
     private fun readProgramme(r: JsonReader, pool: StringPool): Programme? {
