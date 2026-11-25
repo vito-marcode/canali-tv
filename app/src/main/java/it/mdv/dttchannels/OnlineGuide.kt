@@ -92,7 +92,11 @@ object OnlineGuide {
     private fun refreshEpg(ctx: Context, channels: List<Channel>, ovr: Map<String, Override>): Boolean {
         val prefs = ctx.getSharedPreferences("dtt", 0)
         val epgFile = File(ctx.filesDir, "epg.json")
-        val etag = if (epgFile.exists()) prefs.getString("xmltv_etag", null) else null
+        // epg.json is keyed by channel id, and a channel scan renumbers every id: a different channel list
+        // rebuilds the guide even when the XMLTV itself has not changed
+        val sig = channels.joinToString(",") { "${it.id}:${it.lcn}:${it.name}" }.hashCode().toString()
+        val sameChannels = prefs.getString("xmltv_channels", null) == sig
+        val etag = if (epgFile.exists() && sameChannels) prefs.getString("xmltv_etag", null) else null
         val con = URL(XMLTV_URL).openConnection() as HttpURLConnection
         con.connectTimeout = 15_000; con.readTimeout = 120_000
         con.setRequestProperty("User-Agent", "canali-tv")
@@ -150,6 +154,7 @@ object OnlineGuide {
             }
         }
         con.headerFields["ETag"]?.firstOrNull()?.let { prefs.edit().putString("xmltv_etag", it).apply() }
+        prefs.edit().putString("xmltv_channels", sig).apply()
 
         // best XMLTV id per norm: the one with most programmes
         val bestForNorm = HashMap<String, String>()
